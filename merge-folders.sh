@@ -1,0 +1,1 @@
+rsync --verbose --remove-source-files --update --recursive --no-perms --no-owner "/Volumes/Miso Film Sweden/01. IN DEVELOPMENT/Box arvhice/Box-Box (arkiv)/01. IN DEVELOPMENT" "/Volumes/Miso Film Sweden/01. IN DEVELOPMENT"

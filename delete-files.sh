@@ -1,43 +1,68 @@
 #!/bin/bash
 
-logger -s -p user.notice "Starting delete-files script"
+usage() {
+    echo "Usage: $0 --path <path_to_start_from> --target <target_name> [--dry]"
+    exit 1
+}
 
-#Get Params for script and set defaults
-path="" # defaults to run in current directory
-pathToNotice=/tmp #Default to put notice in /tmp
+DRY_RUN=0
+TARGET_PATH=""
+TARGET_NAME=""
 
-POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     key="$1"
-
     case $key in
-    -p | --path)
-        path="$2"
+        --path)
+        TARGET_PATH="$2"
         shift # past argument
         shift # past value
         ;;
-    -n | --pathtonotice)
-        pathToNotice="$2"
+        --target)
+        TARGET_NAME="$2"
         shift # past argument
         shift # past value
         ;;
-    *) # unknown option
-        POSITIONAL+=("$1") # save it in an array for later
-        shift              # past argument
+        --dry)
+        DRY_RUN=1
+        shift # past argument
+        ;;
+        *)
+        usage
         ;;
     esac
 done
 
-set -- "${POSITIONAL[@]}" # restore positional parameters
-
-if [[ -d "$path" ]]; then
-    logger -s -p user.notice "Delete-files: Will use path = $path"
-else
-    logger -s -p user.error "Delete-files: Please call this script with the following params: --path or -p"
-    exit
+if [[ -z "$TARGET_PATH" || -z "$TARGET_NAME" ]]; then
+    usage
 fi
 
-find "$path" -type f -name '~$*' | while read thing; do
-   logger "Removing $thing";
-   rm "$thing";
-done
+
+# Function to search and delete (or dry run)
+function delete_target {
+    local path="$1"
+    local target="$2"
+    local is_dry_run="$3"
+
+    # Use find to recursively go through directories
+    find "$path" -type d | while read dir; do
+        echo "Searching in: $dir"
+        find "$dir" -maxdepth 1 -name "$target" | while read line; do
+            # If dry run, just print the target
+            if [[ "$is_dry_run" -eq 1 ]]; then
+                echo "Will delete: $line"
+            else
+                # Try to remove the target (either file or directory)
+                if [[ -d "$line" ]]; then
+                    echo "Deleted directory: $line"
+                    #rm -rf "$line" && echo "Deleted directory: $line"
+                else
+                echo "Deleted file: $line"
+                    #rm -f "$line" && echo "Deleted file: $line"
+                fi
+            fi
+        done
+    done
+}
+
+# Call the function
+delete_target "$TARGET_PATH" "$TARGET_NAME" "$DRY_RUN"
