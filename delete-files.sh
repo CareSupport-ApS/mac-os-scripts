@@ -14,7 +14,7 @@ while [[ $# -gt 0 ]]; do
     case $key in
         --path)
         TARGET_PATH="$2"
-        shift # past argument
+        shift # past $target
         shift # past value
         ;;
         --target)
@@ -36,33 +36,44 @@ if [[ -z "$TARGET_PATH" || -z "$TARGET_NAME" ]]; then
     usage
 fi
 
+if [[ -d "$TARGET_PATH" ]]; then
+    echo "Directory exists, proceeding..."
+else
+    echo "Directory does not exist or is not readable: $TARGET_PATH"
+    exit 1
+fi
+
 
 # Function to search and delete (or dry run)
+
 function delete_target {
     local path="$1"
-    local target="$2"
+    local targets="$2"
     local is_dry_run="$3"
 
-    # Use find to recursively go through directories
-    find "$path" -type d | while read dir; do
-        echo "Searching in: $dir"
-        find "$dir" -maxdepth 1 -name "$target" | while read line; do
-            # If dry run, just print the target
-            if [[ "$is_dry_run" -eq 1 ]]; then
-                echo "Will delete: $line"
-            else
-                # Try to remove the target (either file or directory)
-                if [[ -d "$line" ]]; then
-                    echo "Deleted directory: $line"
-                    #rm -rf "$line" && echo "Deleted directory: $line"
+    IFS=',' read -ra TARGET_ARRAY <<< "$targets"
+
+    find "$path" | while read -r line; do
+        for target in "${TARGET_ARRAY[@]}"; do
+            if echo "$line" | grep -q "$target"; then
+                if [[ $is_dry_run -eq 1 ]]; then
+                    echo "Will delete: $line"
                 else
-                echo "Deleted file: $line"
-                    #rm -f "$line" && echo "Deleted file: $line"
+                    if [[ -d "$line" ]]; then
+                        echo "Attempting to delete directory: $line"
+                        rmdir "$line" 2>/dev/null || echo "Skipping non-empty directory: $line"
+                    elif [[ -f "$line" ]]; then
+                        echo "Deleting file: $line"
+                        rm -f "$line"
+                    fi
                 fi
             fi
         done
     done
 }
+
+
+# }
 
 # Call the function
 delete_target "$TARGET_PATH" "$TARGET_NAME" "$DRY_RUN"
