@@ -60,12 +60,35 @@ function delete_target {
     IFS=',' read -ra TARGET_ARRAY <<< "$targets"
 
     find "$path" | while read -r line; do
+         # Check if the line still exists
+        if [[ ! -e "$line" ]]; then
+            continue
+        fi
+
+
         for target in "${TARGET_ARRAY[@]}"; do
             if echo "$line" | grep -q "$target"; then
+                # Get the modification time in epoch seconds
+                if [[ "$(uname)" == "Darwin" ]]; then
+                    # macOS stat command
+                    mod_time=$(stat -f %m "$line")
+                else
+                    # Assume GNU/Linux stat command
+                    mod_time=$(stat -c %Y "$line")
+                fi
+
+                # Get the current time in epoch seconds
+                current_time=$(date +%s)
+
+                # Check if the item was modified less than 2 minutes ago
+                if [[ $((current_time - mod_time)) -le 120 ]]; then
+                    echo "$line was modified less than 2 minutes ago, skipping."
+                    continue
+                fi
+
                 if [[ $is_dry_run -eq 1 ]]; then
                     echo "Will delete: $line"
                 else
-                    if [[ -n "$recycle_bin" ]]; then
                         local recycle_path="${recycle_bin}${line#$path}"
 
                         # Check if the line is a directory; if so, adjust the path
@@ -78,18 +101,8 @@ function delete_target {
                         if [[ ! -d "$recycle_dir" ]]; then
                             mkdir -p "$recycle_dir"
                         fi
-
-                        echo "Moving to recycle bin: $recycle_path"
-                        mv "$line" "$recycle_path"
-                    else
-                        if [[ -d "$line" ]]; then
-                            echo "Attempting to delete directory: $line"
-                            rmdir "$line" 2>/dev/null || echo "Skipping non-empty directory: $line"
-                        elif [[ -f "$line" ]]; then
-                            echo "Deleting file: $line"
-                            rm -f "$line"
-                        fi
-                    fi
+echo "Moving to recycle bin: $recycle_path"
+mv "$line" "$recycle_path"
                 fi
             fi
         done
