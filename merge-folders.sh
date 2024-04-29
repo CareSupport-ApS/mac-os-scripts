@@ -37,7 +37,7 @@ fi
 
 # Execute the rsync command
 echo "Running rsync command..."
-rsync $dry_run --verbose --recursive --no-perms --no-owner "$source_dir" "$dest_dir"
+rsync $dry_run --verbose --recursive --update "$source_dir" "$dest_dir"
 
 # Inform the user the script has finished
 echo "rsync operation completed."

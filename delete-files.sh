@@ -1,14 +1,15 @@
 #!/bin/bash
 
-usage() {
-    echo "Usage: $0 --path <path_to_start_from> --target <target_name> [--dry] [--recycle-bin-path <path_to_recycle_bin>]"
-    exit 1
-}
-
 DRY_RUN=0
 TARGET_PATH=""
-TARGET_NAME=""
+TARGET_FILES=".smbdelete*,_gsdata_,.docx.sb-*,.doc.sb-*,.xlsx.sb-*,.AppleDouble,.pdf.sb-*,.key.sb-*,.jpg.sb-*,.jpeg.sb-*"
 RECYCLE_BIN_PATH=""
+
+usage() {
+    echo "Usage: $0 --path <path_to_start_from> --target <target_files> [--dry] [--recycle-bin-path <path_to_recycle_bin>]"
+    echo "If no --target is specified, default target will be used: $TARGET_FILES"
+    exit 1
+}
 
 while [[ $# -gt 0 ]]; do
     key="$1"
@@ -19,7 +20,7 @@ while [[ $# -gt 0 ]]; do
         shift # past value
         ;;
         --target)
-        TARGET_NAME="$2"
+        TARGET_FILES="$2"
         shift # past argument
         shift # past value
         ;;
@@ -38,7 +39,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$TARGET_PATH" || -z "$TARGET_NAME" ]]; then
+if [[ -z "$TARGET_PATH" ]]; then
     usage
 fi
 
@@ -110,4 +111,4 @@ mv "$line" "$recycle_path"
 }
 
 # Call the function
-delete_target "$TARGET_PATH" "$TARGET_NAME" "$DRY_RUN" "$RECYCLE_BIN_PATH"
+delete_target "$TARGET_PATH" "$TARGET_FILES" "$DRY_RUN" "$RECYCLE_BIN_PATH"
