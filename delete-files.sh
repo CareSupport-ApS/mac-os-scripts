@@ -52,6 +52,22 @@ fi
 
 # Function to search and delete (or dry run)
 
+# Function to check if file is in use
+is_file_in_use() {
+    local file="$1"
+    # Try to open the file for reading and writing
+    exec 3>"$file" 2>/dev/null
+    if [[ $? -eq 0 ]]; then
+        # File is not in use
+        exec 3>&-
+        return 1
+    else
+        # File is in use
+        return 0
+    fi
+}
+
+
 function delete_target {
     local path="$1"
     local targets="$2"
@@ -84,6 +100,12 @@ function delete_target {
                 # Check if the item was modified less than 2 minutes ago
                 if [[ $((current_time - mod_time)) -le 120 ]]; then
                     echo "$line was modified less than 2 minutes ago, skipping."
+                    continue
+                fi
+
+                # Check if the file is in use
+                if is_file_in_use "$line"; then
+                    echo "$line is currently in use, skipping."
                     continue
                 fi
 

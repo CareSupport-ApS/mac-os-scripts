@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# THE SOURCE FOLDEr NEEDS / at the end, but the destination folder do not. 
+
 # Default dry run to true
 dry_run="--dry-run"
 
