@@ -2,7 +2,7 @@
 
 DRY_RUN=0
 TARGET_PATH=""
-TARGET_FILES=".smbdelete*,_gsdata_,.docx.sb-*,.doc.sb-*,.xlsx.sb-*,.AppleDouble,.pdf.sb-*,.key.sb-*,.jpg.sb-*,.jpeg.sb-*"
+TARGET_FILES=".smbdelete*,_gsdata_,.docx.sb-*,.doc.sb-*,.xlsx.sb-*,.AppleDouble,.pdf.sb-*,.key.sb-*,.jpg.sb-*,.jpeg.sb-*,~$*"
 RECYCLE_BIN_PATH=""
 
 usage() {
@@ -50,11 +50,16 @@ else
     exit 1
 fi
 
-# Function to search and delete (or dry run)
-
 # Function to check if file is in use
 is_file_in_use() {
     local file="$1"
+
+     # Check if it's a directory
+    if [[ -d "$file" ]]; then
+        # A directory cannot be in use in the same way as a file
+        return 1
+    fi
+
     # Try to open the file for reading and writing
     exec 3>"$file" 2>/dev/null
     if [[ $? -eq 0 ]]; then
@@ -67,6 +72,16 @@ is_file_in_use() {
     fi
 }
 
+function get_mod_time {
+    local file="$1"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # macOS stat command
+        stat -f %m "$file"
+    else
+        # Assume GNU/Linux stat command
+        stat -c %Y "$file"
+    fi
+}
 
 function delete_target {
     local path="$1"
@@ -77,27 +92,42 @@ function delete_target {
     IFS=',' read -ra TARGET_ARRAY <<< "$targets"
 
     find "$path" | while read -r line; do
-         # Check if the line still exists
+              # Skip directories starting with @eaDir
+    if [[ "$line" =~ /@eaDir/ ]]; then
+        continue
+    fi
+
+
+      # Check if the line still exists (skip if deleted)
         if [[ ! -e "$line" ]]; then
             continue
         fi
 
+   
+
+    # Get the modification time in epoch seconds using the reusable function
+     mod_time=$(get_mod_time "$line")
+
+    # Get the current time in epoch seconds
+     current_time=$(date +%s)
+
+      # Check if the file is a temp Office file (starts with /~$)
+        if [[ "$line" =~ /~\$ ]]; then
+            # If it's a temp file, check if it's over 1 day old (86400 seconds)
+            if [[ $((current_time - mod_time)) -le 86400 ]]; then
+                echo "$line is a temp Office file, and was modified less than 1 day ago, skipping."
+                continue
+            else
+                # Temp file is older than 1 day, so delete it
+                delete_file "$line" "$path" "$recycle_bin" "$is_dry_run"
+                continue
+            fi
+        fi
 
         for target in "${TARGET_ARRAY[@]}"; do
             if echo "$line" | grep -q "$target"; then
-                # Get the modification time in epoch seconds
-                if [[ "$(uname)" == "Darwin" ]]; then
-                    # macOS stat command
-                    mod_time=$(stat -f %m "$line")
-                else
-                    # Assume GNU/Linux stat command
-                    mod_time=$(stat -c %Y "$line")
-                fi
-
-                # Get the current time in epoch seconds
-                current_time=$(date +%s)
-
-                # Check if the item was modified less than 2 minutes ago
+                
+                # Check if the item was modified less than 2 minutes ago (for general files)
                 if [[ $((current_time - mod_time)) -le 120 ]]; then
                     echo "$line was modified less than 2 minutes ago, skipping."
                     continue
@@ -109,27 +139,40 @@ function delete_target {
                     continue
                 fi
 
-                if [[ $is_dry_run -eq 1 ]]; then
-                    echo "Will delete: $line"
-                else
-                        local recycle_path="${recycle_bin}${line#$path}"
-
-                        # Check if the line is a directory; if so, adjust the path
-                        if [[ -d "$line" ]]; then
-                            recycle_path="${recycle_bin}${line#$path}"
-                        fi
-                        
-                        # Create the directory only if it does not exist
-                        local recycle_dir="$(dirname "$recycle_path")"
-                        if [[ ! -d "$recycle_dir" ]]; then
-                            mkdir -p "$recycle_dir"
-                        fi
-echo "Moving to recycle bin: $recycle_path"
-mv "$line" "$recycle_path"
-                fi
+                 # Delete the file if it matches
+                delete_file "$line" "$path" "$recycle_bin" "$is_dry_run"
             fi
         done
     done
+}
+
+function delete_file {
+    local line="$1"
+    local path="$2"
+    local recycle_bin="$3"
+    local is_dry_run="$4"
+
+    # Create the recycle path (adjust the path to include the recycle bin directory)
+    local recycle_path="${recycle_bin}${line#$path}"
+
+    # Check if the line is a directory; if so, adjust the path
+    if [[ -d "$line" ]]; then
+        recycle_path="${recycle_bin}${line#$path}"
+    fi
+
+    # Create the directory only if it does not exist
+    local recycle_dir="$(dirname "$recycle_path")"
+    if [[ ! -d "$recycle_dir" ]]; then
+        mkdir -p "$recycle_dir"
+    fi
+
+    # Perform the move or dry-run
+    if [[ $is_dry_run -eq 1 ]]; then
+        echo "Would delete delete: $line"
+    else
+        echo "Moving to recycle bin: $recycle_path"
+        mv "$line" "$recycle_path"
+    fi
 }
 
 # Call the function
